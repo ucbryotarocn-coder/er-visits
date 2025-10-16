@@ -1,7 +1,47 @@
 ---
 title: Report
-author: <Your Name>
+author: Ryotaro Okumura
 format: typst
 ---
 
-TODO
+1) Q5 Age (months): Histogram 
+
+```{r}
+p1 <- ggplot(df, aes(x = age_months)) +
+geom_histogram(binwidth = 6, color = "white") +
+labs(title = "Patient Age (months)", x = "Age (months)", y = "Count")
+p1
+
+```
+
+Note: Many patients are in early childhood. This helps us plan how to examine younger kids.
+
+
+
+2) Q6-7 Loss of Consciousness (LOC) × ciTBI: Counts
+```{r}
+loc_tbl <- df |>
+group_by(loc_duration_min, citbi) |>
+summarise(n = n(), .groups = "drop")
+
+p2 <- ggplot(loc_tbl, aes(x = factor(loc_duration_min), y = n, fill = citbi)) +
+geom_col(position = "dodge") +
+labs(title = "LOC (minutes) vs ciTBI", x = "LOC duration (minutes)", y = "Count", fill = "Outcome")
+p2
+```
+
+Note: If longer LOC has more ciTBI, it suggests closer checks or imaging for those patients.
+
+
+3) Q8a Age (years) × ciTBI: Proportion (stacked, normalized)
+
+```{r}
+p3 <- ggplot(df, aes(x = cut(age_years, breaks = seq(0, 18, 2)), fill = citbi)) +
+geom_bar(position = "fill") +
+labs(title = "ciTBI Proportion by Age (2-year bins)", x = "Age (years)", y = "Proportion", fill = "Outcome")
+p3
+
+```
+
+Note: The ciTBI rate can change across age groups. Younger groups may show higher rates.
+
