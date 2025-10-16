@@ -4,10 +4,63 @@ author: Ryotaro Okumura
 format: typst
 ---
 
-1) Q5 Age (months): Histogram 
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
 
 ```{r}
-p1 <- ggplot(df, aes(x = age_months)) +
+er <- readr::read_csv("data/citbi.csv", show_col_types = FALSE)
+
+er <- er |>
+  mutate(across(everything(), ~ ifelse(.x %in% c(91, 92, 99), NA, .x))) |>
+  rename(
+    patient_id = PatNum,
+    amnesia_reported = Amnesia_verb,
+    loc_duration_min = LocLen,
+    seizure = Seiz,
+    seizure_duration_sec = SeizLen,
+    acting_normal = ActNorm,
+    headache_reported = HA_verb,
+    vomiting = Vomit,
+    dizziness = Dizzy,
+    gcs_eye = GCSEye,
+    gcs_verbal = GCSVerbal,
+    gcs_motor = GCSMotor,
+    gcs_total = GCSTotal,
+    altered_mental_status = AMS,
+    palpable_skull_fracture = SFxPalp,
+    bulging_fontanelle = FontBulg,
+    scalp_hematoma = Hema,
+    clavicle_trauma = Clav,
+    neurologic_deficit = NeuroD,
+    other_significant_injury = OSI,
+    ct_form1_flag = CTForm1,
+    age_months = AgeInMonth,
+    sex = Gender,
+    ct_done = CTDone,
+    death_due_to_tbi = DeathTBI,
+    intracranial_injury_final = PosIntFinal
+  ) |>
+  mutate(
+    sex = as.factor(sex),
+    age_months = as.integer(age_months),
+    gcs_total = as.integer(gcs_total),
+    loc_duration_min = as.numeric(loc_duration_min),
+    age_years = age_months / 12,
+    citbi = case_when(
+      is.na(intracranial_injury_final) ~ NA_character_,
+      as.character(intracranial_injury_final) %in% c("1","Yes","TRUE","T","Y") ~ "ciTBI",
+      as.character(intracranial_injury_final) %in% c("0","No","FALSE","F","N") ~ "No ciTBI",
+      TRUE ~ as.character(intracranial_injury_final)
+    ) |> factor(levels = c("No ciTBI","ciTBI"))
+  )
+```
+
+1)  Q5 Age (months): Histogram
+
+```{r}
+p1 <- ggplot(er, aes(x = age_months)) +
 geom_histogram(binwidth = 6, color = "white") +
 labs(title = "Patient Age (months)", x = "Age (months)", y = "Count")
 p1
@@ -16,11 +69,10 @@ p1
 
 Note: Many patients are in early childhood. This helps us plan how to examine younger kids.
 
+2)  Q6-7 Loss of Consciousness (LOC) × ciTBI: Counts
 
-
-2) Q6-7 Loss of Consciousness (LOC) × ciTBI: Counts
 ```{r}
-loc_tbl <- df |>
+loc_tbl <- er |>
 group_by(loc_duration_min, citbi) |>
 summarise(n = n(), .groups = "drop")
 
@@ -32,11 +84,10 @@ p2
 
 Note: If longer LOC has more ciTBI, it suggests closer checks or imaging for those patients.
 
-
-3) Q8a Age (years) × ciTBI: Proportion (stacked, normalized)
+3)  Q8a Age (years) × ciTBI: Proportion (stacked, normalized)
 
 ```{r}
-p3 <- ggplot(df, aes(x = cut(age_years, breaks = seq(0, 18, 2)), fill = citbi)) +
+p3 <- ggplot(er, aes(x = cut(age_years, breaks = seq(0, 18, 2)), fill = citbi)) +
 geom_bar(position = "fill") +
 labs(title = "ciTBI Proportion by Age (2-year bins)", x = "Age (years)", y = "Proportion", fill = "Outcome")
 p3
@@ -44,4 +95,3 @@ p3
 ```
 
 Note: The ciTBI rate can change across age groups. Younger groups may show higher rates.
-
