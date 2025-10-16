@@ -1,12 +1,15 @@
 ---
 title: Data Preparation
-author: <Your Name>
+author: Ryotaro Okumura
 format: typst
 ---
 
 ```{r}
 # Load necessary libraries:
 # ...
+library(tidyverse)
+citbi <- read_csv("data/citbi.csv")
+dim(citbi)
 
 ```
 
@@ -15,17 +18,200 @@ format: typst
 ## Part I: Data Cleaning
 
 ```{r}
-
+#Address Missing data
+citbi_clean <- citbi |>
+                mutate(across(everything(), ~ case_when(
+                    .x %in% c(91, 92, 99) ~ NA, 
+                    TRUE ~.x
+                )))
 ```
 
+```{r}
+names(citbi_clean)
+```
 
+```{r}
+#Change Variable Name
+citbi_clean <- citbi_clean |>
+                rename(
+                        patient_id = PatNum,
+                        amnesia_reported = Amnesia_verb,
+                        loc_duration_min = LocLen,
+                        seizure = Seiz,
+                        seizure_duration_sec = SeizLen,
+                        acting_normal = ActNorm,
+                        headache_reported = HA_verb,
+                        vomiting = Vomit,
+                        dizziness = Dizzy,
+                        gcs_eye = GCSEye,
+                        gcs_verbal = GCSVerbal,
+                        gcs_motor = GCSMotor,
+                        gcs_total = GCSTotal,
+                        altered_mental_status = AMS,
+                        palpable_skull_fracture = SFxPalp,
+                        bulging_fontanelle = FontBulg,
+                        scalp_hematoma = Hema,
+                        clavicle_trauma = Clav,
+                        neurologic_deficit = NeuroD,
+                        other_significant_injury = OSI,
+                        ct_form1_flag = CTForm1,
+                        age_months = AgeInMonth,
+                        sex = Gender,
+                        ct_done = CTDone,
+                        death_due_to_tbi = DeathTBI,
+                        intracranial_injury_final = PosIntFinal
+                        )
+```
+
+```{r}
+#Specify Variable Types
+citbi_clean <- citbi_clean |>
+                   mutate(
+                    patient_id = as.character(patient_id),
+                    sex = as.factor(sex),
+                    age_months = as.integer(age_months),
+                    gcs_eye = as.integer(gcs_eye),
+                    gcs_verbal = as.integer(gcs_verbal),
+                    gcs_motor = as.integer(gcs_motor),
+                    gcs_total = as.integer(gcs_total),
+                    loc_duration_min = as.numeric(loc_duration_min),
+                    seizure_duration_sec = as.numeric(seizure_duration_sec)
+  )
+```
 
 {{< pagebreak >}}
 
-
-
 ## Part II: Exploratory Data Analysis (EDA)
 
-```{r}
+### 4. Create a missing data summary
 
+```{r}
+missing_summary <- citbi_clean |>
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  pivot_longer(everything(),
+               names_to = "variable",
+               values_to = "missing_count") |>
+  mutate(
+    total_rows = nrow(citbi_clean),
+    missing_prop = round(missing_count / total_rows, 3)
+  ) |>
+  arrange(desc(missing_prop))
+missing_summary
+```
+
+### 5. Create a histogram of the patient ages in months.
+
+```{r}
+gg_age_months <- ggplot(citbi_clean, aes(x = age_months)) +
+  geom_histogram(binwidth = 6, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of Patient Ages (in Months)",
+    x = "Age (months)",
+    y = "Number of Patients"
+  ) 
+gg_age_months
+```
+
+### 6. Create a grouped summary table that shows the total count of patients for every combination of the loss of consciousness
+
+```{r}
+loc_citbi_summary <- citbi_clean |>
+  group_by(loc_duration_min, intracranial_injury_final) |>
+  summarise(patient_count = n(), .groups = "drop") |>
+  arrange(loc_duration_min)
+
+loc_citbi_summary
+```
+
+### 7. Create a bar chart to visualize the count for each category side-by-side in length of loss of consciousness by ciTBI outcome.
+
+```{r}
+ggplot(loc_citbi_summary, aes(x = factor(loc_duration_min),
+                              y = patient_count,
+                              fill = factor(intracranial_injury_final))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Patient Counts by Loss of Consciousness Duration and ciTBI Outcome",
+    x = "Loss of Consciousness Duration (minutes)",
+    y = "Number of Patients",
+    fill = "ciTBI Outcome"
+  )
+```
+
+### 8. The variable (originally) named “GCSTotal” refers to the Glasgow Coma Scale (GCS) score, a neurological assessment used to evaluate the patient’s level of consciousness. Create three visualizations for
+the relationship between total GCS score, Age in years, and ciTBI outcome.
+
+### a. Create a stacked normalized bar chart to visualize how the proportion of patients with ciTBI varies
+across different ages.
+
+```{r}
+citbi_clean <- citbi_clean |>
+  mutate(age_years = age_months / 12)
+
+ggplot(citbi_clean, aes(x = cut(age_years, breaks = seq(0, 18, 2)),
+                   fill = factor(intracranial_injury_final))) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Proportion of ciTBI Across Age Groups",
+    x = "Age Group (years)",
+    y = "Proportion of Patients",
+    fill = "ciTBI Outcome"
+  )
+```
+
+### b. Explore whether the relationship between age and ciTBI differs across Glasgow Coma Scale scores. Create a stacked normalized bar chart that shows the proportion of patients with ciTBI across age, now faceted by total GCS score.
+
+```{r}
+ggplot(citbi_clean, aes(x = cut(age_years, breaks = seq(0, 18, 2)),
+                   fill = factor(intracranial_injury_final))) +
+  geom_bar(position = "fill") +
+  facet_wrap(~ gcs_total) +
+  labs(
+    title = "Proportion of ciTBI Across Age (Faceted by Total GCS Score)",
+    x = "Age Group (years)",
+    y = "Proportion of Patients",
+    fill = "ciTBI Outcome"
+)
+```
+
+### 
+c. Create a stacked bar chart that shows the number of patients with ciTBI across age faceted by total GCS score.
+
+```{r}
+ggplot(citbi_clean, aes(x = cut(age_years, breaks = seq(0, 18, 2)),
+                   fill = factor(intracranial_injury_final))) +
+  geom_bar(position = "stack") +
+  facet_wrap(~ gcs_total) +
+  labs(
+    title = "Number of Patients with ciTBI Across Age (Faceted by GCS Score)",
+    x = "Age Group (years)",
+    y = "Number of Patients",
+    fill = "ciTBI Outcome"
+  )
+```
+
+### 9. Create a scatter plot to visualize any two numeric variables the dataset. Describe any interesting patterns you see.
+
+```{r}
+ggplot(citbi_clean, aes(x = age_months, y = gcs_total)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  labs(
+    title = "Relationship Between Age and GCS Total Score",
+    x = "Age (months)",
+    y = "Total GCS Score"
+  )
+```
+
+### 10. Create a table that summarizes at least two statistics grouped by two categorical variables. Describe any interesting pattern you see.
+
+```{r}
+summary_table <- citbi_clean |>
+  group_by(sex, intracranial_injury_final) |>
+  summarise(
+    mean_age_months = round(mean(age_months, na.rm = TRUE), 1),
+    mean_gcs_total  = round(mean(gcs_total, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+summary_table
 ```
